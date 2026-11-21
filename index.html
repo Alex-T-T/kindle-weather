@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- Автоматичне оновлення сторінки кожні 30 хвилин (1800 секунд) -->
+  <meta http-equiv="refresh" content="1800">
+  <title>Погода Львів — Kindle</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #ffffff;
+      color: #000000;
+      font-family: Arial, Helvetica, sans-serif;
+      width: 580px;
+      margin: 0 auto;
+      padding: 12px 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .header {
+      border-bottom: 3px solid #000000;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+    .city {
+      font-size: 28px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .updated {
+      font-size: 16px;
+      text-align: right;
+      vertical-align: bottom;
+    }
+    .current-box {
+      border: 3px solid #000000;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .temp-now {
+      font-size: 76px;
+      font-weight: bold;
+      line-height: 1;
+      width: 52%;
+    }
+    .details-now {
+      font-size: 20px;
+      line-height: 1.4;
+      vertical-align: middle;
+      width: 48%;
+    }
+    .cond-now {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      text-transform: uppercase;
+      background-color: #000000;
+      color: #ffffff;
+      padding: 5px 10px;
+      margin-bottom: 8px;
+    }
+    .hourly-table {
+      margin-bottom: 14px;
+      border: 2px solid #000000;
+    }
+    .hourly-table td {
+      width: 25%;
+      text-align: center;
+      padding: 8px 4px;
+      border-right: 2px solid #000000;
+    }
+    .hourly-table td:last-child {
+      border-right: none;
+    }
+    .h-time {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .h-temp {
+      font-size: 28px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+    .h-desc {
+      font-size: 15px;
+    }
+    .daily-table td {
+      padding: 9px 6px;
+      border-bottom: 2px solid #000000;
+      font-size: 21px;
+    }
+    .daily-table tr:last-child td {
+      border-bottom: none;
+    }
+    .d-day {
+      font-weight: bold;
+      width: 28%;
+    }
+    .d-desc {
+      width: 44%;
+      font-size: 18px;
+    }
+    .d-temp {
+      text-align: right;
+      font-weight: bold;
+      width: 28%;
+    }
+    .error-msg {
+      font-size: 20px;
+      font-weight: bold;
+      padding: 20px;
+      border: 2px solid #000000;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <table class="header">
+    <tr>
+      <td class="city">Львів</td>
+      <td class="updated" id="updated-time">Оновлення...</td>
+    </tr>
+  </table>
+
+  <div id="content">
+    <div class="error-msg">Завантаження прогнозу погоди...</div>
+  </div>
+
+  <script type="text/javascript">
+    (function() {
+      // Координати Львова (49.8397, 24.0297)
+      // Використовуємо HTTP-запит до Open-Meteo, щоб уникнути проблем зі старими SSL-сертифікатами Kindle 7
+      var apiUrl = "http://api.open-meteo.com/v1/forecast?latitude=49.8397&longitude=24.0297&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FKyiv&forecast_days=7";
+
+      var daysShort = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+      var daysFull = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"];
+
+      function getWeatherText(code) {
+        if (code === 0) return "Ясно";
+        if (code === 1) return "Переважно ясно";
+        if (code === 2) return "Мінлива хмарність";
+        if (code === 3) return "Похмуро";
+        if (code === 45 || code === 48) return "Туман";
+        if (code >= 51 && code <= 57) return "Мряка";
+        if (code >= 61 && code <= 67) return "Дощ";
+        if (code >= 71 && code <= 77) return "Сніг";
+        if (code >= 80 && code <= 82) return "Злива";
+        if (code >= 85 && code <= 86) return "Снігопад";
+        if (code >= 95) return "Гроза";
+        return "Хмарно";
+      }
+
+      function formatTemp(val) {
+        var rounded = Math.round(val);
+        return (rounded > 0 ? "+" : "") + rounded + "°";
+      }
+
+      function padZero(num) {
+        return num < 10 ? "0" + num : "" + num;
+      }
+
+      function renderWeather(data) {
+        var now = new Date();
+        document.getElementById("updated-time").innerHTML =
+          "Оновлено: " + padZero(now.getHours()) + ":" + padZero(now.getMinutes());
+
+        var cur = data.current;
+        var html = "";
+
+        // 1. Поточна погода
+        html += '<div class="current-box"><table><tr>';
+        html += '<td class="temp-now">' + formatTemp(cur.temperature_2m) + '</td>';
+        html += '<td class="details-now">';
+        html += '<div class="cond-now">' + getWeatherText(cur.weather_code) + '</div>';
+        html += 'Відчувається: <b>' + formatTemp(cur.apparent_temperature) + '</b><br>';
+        html += 'Вітер: <b>' + Math.round(cur.wind_speed_10m) + ' км/год</b><br>';
+        html += 'Вологість: <b>' + cur.relative_humidity_2m + '%</b>';
+        html += '</td></tr></table></div>';
+
+        // 2. Прогноз на найближчі години (через кожні 3 години)
+        html += '<div class="section-title">Протягом дня</div>';
+        html += '<table class="hourly-table"><tr>';
+        var currentHour = now.getHours();
+        var shownHours = 0;
+        for (var i = 0; i < data.hourly.time.length; i++) {
+          var itemDate = new Date(data.hourly.time[i]);
+          if (itemDate.getTime() > now.getTime() && shownHours < 4) {
+            // Беремо кожну 3-тю годину від найближчої
+            if ((itemDate.getHours() - currentHour) % 3 === 0 || shownHours === 0) {
+              var hStr = padZero(itemDate.getHours()) + ":00";
+              html += '<td>';
+              html += '<div class="h-time">' + hStr + '</div>';
+              html += '<div class="h-temp">' + formatTemp(data.hourly.temperature_2m[i]) + '</div>';
+              html += '<div class="h-desc">' + getWeatherText(data.hourly.weather_code[i]) + '</div>';
+              html += '</td>';
+              shownHours++;
+            }
+          }
+        }
+        html += '</tr></table>';
+
+        // 3. Прогноз на 7 днів
+        html += '<div class="section-title">Прогноз на тиждень</div>';
+        html += '<table class="daily-table">';
+        for (var d = 0; d < data.daily.time.length; d++) {
+          var parts = data.daily.time[d].split("-");
+          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          var dayLabel = (d === 0) ? "Сьогодні" : (d === 1 ? "Завтра" : daysFull[dateObj.getDay()]);
+          var dateShort = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
+
+          html += '<tr>';
+          html += '<td class="d-day">' + dayLabel + ' <span style="font-weight:normal;font-size:16px;">(' + dateShort + ')</span></td>';
+          html += '<td class="d-desc">' + getWeatherText(data.daily.weather_code[d]) + '</td>';
+          html += '<td class="d-temp">' + formatTemp(data.daily.temperature_2m_min[d]) + ' .. ' + formatTemp(data.daily.temperature_2m_max[d]) + '</td>';
+          html += '</tr>';
+        }
+        html += '</table>';
+
+        document.getElementById("content").innerHTML = html;
+      }
+
+      function fetchWeather() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", apiUrl, true);
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+              try {
+                var json = JSON.parse(xhr.responseText);
+                renderWeather(json);
+              } catch (e) {
+                document.getElementById("content").innerHTML =
+                  '<div class="error-msg">Помилка обробки даних погоди.</div>';
+              }
+            } else {
+              document.getElementById("content").innerHTML =
+                '<div class="error-msg">Не вдалося завантажити дані (код: ' + xhr.status + '). Перевірте Wi-Fi.</div>';
+            }
+          }
+        };
+        xhr.send();
+      }
+
+      fetchWeather();
+    })();
+  </script>
+</body>
+</html>
