@@ -140,7 +140,6 @@
 
   <script type="text/javascript">
     (function() {
-      // Використовуємо HTTPS для сумісності з GitHub Pages
       var apiUrl = "https://api.open-meteo.com/v1/forecast?latitude=49.8397&longitude=24.0297&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FKyiv&forecast_days=7";
 
       var daysFull = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"];
@@ -169,7 +168,6 @@
         return num < 10 ? "0" + num : "" + num;
       }
 
-      // Надійний парсер дати для старого браузера Kindle
       function parseIsoDate(str) {
         var parts = str.split("T");
         var d = parts[0].split("-");
@@ -184,11 +182,13 @@
       }
 
       function renderWeather(data) {
-        var now = new Date();
-        document.getElementById("updated-time").innerHTML =
-          "Оновлено: " + padZero(now.getHours()) + ":" + padZero(now.getMinutes());
-
         var cur = data.current;
+        // Беремо локальний час Львова безпосередньо з API, ігноруючи UTC-годинник Kindle
+        var kyivNow = cur.time ? parseIsoDate(cur.time) : new Date();
+
+        document.getElementById("updated-time").innerHTML =
+          "Оновлено: " + padZero(kyivNow.getHours()) + ":" + padZero(kyivNow.getMinutes());
+
         var html = "";
 
         // 1. Поточна погода
@@ -201,14 +201,14 @@
         html += 'Вологість: <b>' + cur.relative_humidity_2m + '%</b>';
         html += '</td></tr></table></div>';
 
-        // 2. Прогноз на найближчі години (через кожні 3 години)
+        // 2. Прогноз на найближчі години (через кожні 3 години від київського часу)
         html += '<div class="section-title">Протягом дня</div>';
         html += '<table class="hourly-table"><tr>';
-        var currentHour = now.getHours();
+        var currentHour = kyivNow.getHours();
         var shownHours = 0;
         for (var i = 0; i < data.hourly.time.length; i++) {
           var itemDate = parseIsoDate(data.hourly.time[i]);
-          if (itemDate.getTime() > now.getTime() && shownHours < 4) {
+          if (itemDate.getTime() > kyivNow.getTime() && shownHours < 4) {
             if ((itemDate.getHours() - currentHour + 24) % 3 === 0 || shownHours === 0) {
               var hStr = padZero(itemDate.getHours()) + ":00";
               html += '<td>';
