@@ -253,8 +253,17 @@
         return n < 10 ? "0" + n : "" + n;
       }
 
-      function hhmm(date) {
-        return padZero(date.getHours()) + ":" + padZero(date.getMinutes());
+      // Час завантаження у часовому поясі Києва.
+      // Браузер Kindle часто не знає часового поясу й рахує час як UTC,
+      // тому беремо абсолютний час пристрою і додаємо зсув, який повертає API
+      // (utc_offset_seconds враховує і зимовий, і літній час).
+      function fetchTimeStr() {
+        if (!lastFetchTime) return "–";
+        var offsetSec = (weatherData && weatherData.utc_offset_seconds !== undefined && weatherData.utc_offset_seconds !== null)
+          ? weatherData.utc_offset_seconds
+          : 7200;
+        var kyiv = new Date(lastFetchTime.getTime() + offsetSec * 1000);
+        return padZero(kyiv.getUTCHours()) + ":" + padZero(kyiv.getUTCMinutes());
       }
 
       function parseIsoDate(str) {
@@ -304,7 +313,7 @@
       function staleNoteHtml() {
         if (!fetchFailed) return "";
         return '<div class="stale-note">Немає з\'єднання. Показано дані з ' +
-          (lastFetchTime ? hhmm(lastFetchTime) : "–") + '. Повтор через 5 хв.</div>';
+          fetchTimeStr() + '. Повтор через 5 хв.</div>';
       }
 
       window.renderMainView = function() {
@@ -318,7 +327,7 @@
         var html = "";
         html += '<table class="header"><tr>';
         html += '<td class="city">Львів</td>';
-        html += '<td class="updated">Оновлено: ' + (lastFetchTime ? hhmm(lastFetchTime) : "–") + '</td>';
+        html += '<td class="updated">Оновлено: ' + fetchTimeStr() + '</td>';
         html += '</tr></table>';
         html += staleNoteHtml();
 
