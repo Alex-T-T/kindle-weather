@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <!-- Автоматичне оновлення сторінки кожні 30 хвилин (1800 секунд) -->
-  <meta http-equiv="refresh" content="1800">
+  <!-- Автоматичне оновлення сторінки кожні 15 хвилин (900 секунд) -->
+  <meta http-equiv="refresh" content="900">
   <title>Погода Львів — Kindle</title>
   <style>
     * {
@@ -18,7 +18,7 @@
       font-family: Arial, Helvetica, sans-serif;
       width: 580px;
       margin: 0 auto;
-      padding: 12px 10px;
+      padding: 10px 10px;
     }
     table {
       width: 100%;
@@ -26,11 +26,11 @@
     }
     .header {
       border-bottom: 3px solid #000000;
-      padding-bottom: 8px;
-      margin-bottom: 12px;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
     }
     .city {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: bold;
       text-transform: uppercase;
     }
@@ -41,80 +41,81 @@
     }
     .current-box {
       border: 3px solid #000000;
-      padding: 14px;
-      margin-bottom: 14px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
     }
     .temp-now {
-      font-size: 76px;
+      font-size: 72px;
       font-weight: bold;
       line-height: 1;
-      width: 52%;
+      width: 50%;
     }
     .details-now {
-      font-size: 20px;
-      line-height: 1.4;
+      font-size: 19px;
+      line-height: 1.35;
       vertical-align: middle;
-      width: 48%;
+      width: 50%;
     }
     .cond-now {
-      font-size: 24px;
+      font-size: 23px;
       font-weight: bold;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .section-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: bold;
       text-transform: uppercase;
       background-color: #000000;
       color: #ffffff;
-      padding: 5px 10px;
-      margin-bottom: 8px;
+      padding: 4px 10px;
+      margin-bottom: 6px;
     }
     .hourly-table {
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       border: 2px solid #000000;
     }
     .hourly-table td {
       width: 25%;
       text-align: center;
-      padding: 8px 4px;
+      padding: 6px 4px;
       border-right: 2px solid #000000;
     }
     .hourly-table td:last-child {
       border-right: none;
     }
     .h-time {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: bold;
     }
     .h-temp {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: bold;
-      margin: 4px 0;
+      margin: 3px 0;
     }
     .h-desc {
-      font-size: 15px;
+      font-size: 14px;
     }
     .daily-table td {
-      padding: 4px 6px;
+      padding: 5px 6px;
       border-bottom: 2px solid #000000;
-      font-size: 18px;
+      font-size: 19px;
     }
     .daily-table tr:last-child td {
       border-bottom: none;
     }
     .d-day {
       font-weight: bold;
-      width: 30%;
+      width: 38%;
     }
     .d-desc {
-      width: 42%;
+      width: 36%;
       font-size: 18px;
+      text-align: center;
     }
     .d-temp {
       text-align: right;
       font-weight: bold;
-      width: 28%;
+      width: 26%;
     }
     .error-msg {
       font-size: 20px;
@@ -183,7 +184,6 @@
 
       function renderWeather(data) {
         var cur = data.current;
-        // Беремо локальний час Львова безпосередньо з API, ігноруючи UTC-годинник Kindle
         var kyivNow = cur.time ? parseIsoDate(cur.time) : new Date();
 
         document.getElementById("updated-time").innerHTML =
@@ -201,7 +201,7 @@
         html += 'Вологість: <b>' + cur.relative_humidity_2m + '%</b>';
         html += '</td></tr></table></div>';
 
-        // 2. Прогноз на найближчі години (через кожні 3 години від київського часу)
+        // 2. Прогноз на найближчі години (через кожні 3 години)
         html += '<div class="section-title">Протягом дня</div>';
         html += '<table class="hourly-table"><tr>';
         var currentHour = kyivNow.getHours();
@@ -232,7 +232,7 @@
           var dateShort = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
 
           html += '<tr>';
-          html += '<td class="d-day">' + dayLabel + ' <span style="font-weight:normal;font-size:16px;">(' + dateShort + ')</span></td>';
+          html += '<td class="d-day">' + dayLabel + ' <span style="font-weight:normal;font-size:15px;">(' + dateShort + ')</span></td>';
           html += '<td class="d-desc">' + getWeatherText(data.daily.weather_code[d]) + '</td>';
           html += '<td class="d-temp">' + formatTemp(data.daily.temperature_2m_min[d]) + ' .. ' + formatTemp(data.daily.temperature_2m_max[d]) + '</td>';
           html += '</tr>';
