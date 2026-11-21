@@ -105,10 +105,10 @@
     }
     .d-day {
       font-weight: bold;
-      width: 28%;
+      width: 30%;
     }
     .d-desc {
-      width: 44%;
+      width: 42%;
       font-size: 18px;
     }
     .d-temp {
@@ -140,11 +140,9 @@
 
   <script type="text/javascript">
     (function() {
-      // Координати Львова (49.8397, 24.0297)
-      // Використовуємо HTTP-запит до Open-Meteo, щоб уникнути проблем зі старими SSL-сертифікатами Kindle 7
-      var apiUrl = "http://api.open-meteo.com/v1/forecast?latitude=49.8397&longitude=24.0297&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FKyiv&forecast_days=7";
+      // Використовуємо HTTPS для сумісності з GitHub Pages
+      var apiUrl = "https://api.open-meteo.com/v1/forecast?latitude=49.8397&longitude=24.0297&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Europe%2FKyiv&forecast_days=7";
 
-      var daysShort = ["Нд", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
       var daysFull = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"];
 
       function getWeatherText(code) {
@@ -171,6 +169,20 @@
         return num < 10 ? "0" + num : "" + num;
       }
 
+      // Надійний парсер дати для старого браузера Kindle
+      function parseIsoDate(str) {
+        var parts = str.split("T");
+        var d = parts[0].split("-");
+        var t = parts[1] ? parts[1].split(":") : [0, 0];
+        return new Date(
+          parseInt(d[0], 10),
+          parseInt(d[1], 10) - 1,
+          parseInt(d[2], 10),
+          parseInt(t[0], 10),
+          parseInt(t[1], 10)
+        );
+      }
+
       function renderWeather(data) {
         var now = new Date();
         document.getElementById("updated-time").innerHTML =
@@ -195,10 +207,9 @@
         var currentHour = now.getHours();
         var shownHours = 0;
         for (var i = 0; i < data.hourly.time.length; i++) {
-          var itemDate = new Date(data.hourly.time[i]);
+          var itemDate = parseIsoDate(data.hourly.time[i]);
           if (itemDate.getTime() > now.getTime() && shownHours < 4) {
-            // Беремо кожну 3-тю годину від найближчої
-            if ((itemDate.getHours() - currentHour) % 3 === 0 || shownHours === 0) {
+            if ((itemDate.getHours() - currentHour + 24) % 3 === 0 || shownHours === 0) {
               var hStr = padZero(itemDate.getHours()) + ":00";
               html += '<td>';
               html += '<div class="h-time">' + hStr + '</div>';
@@ -216,7 +227,7 @@
         html += '<table class="daily-table">';
         for (var d = 0; d < data.daily.time.length; d++) {
           var parts = data.daily.time[d].split("-");
-          var dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+          var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
           var dayLabel = (d === 0) ? "Сьогодні" : (d === 1 ? "Завтра" : daysFull[dateObj.getDay()]);
           var dateShort = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
 
