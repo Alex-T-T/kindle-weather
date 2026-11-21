@@ -40,25 +40,30 @@
     }
     .current-box {
       border: 3px solid #000000;
-      padding: 10px 14px;
+      padding: 10px 12px;
       margin-bottom: 10px;
     }
     .temp-now {
-      font-size: 68px;
+      font-size: 64px;
       font-weight: bold;
       line-height: 1;
-      width: 48%;
+      width: 34%;
+      vertical-align: middle;
     }
     .details-now {
-      font-size: 18px;
-      line-height: 1.3;
       vertical-align: middle;
-      width: 52%;
+      width: 66%;
     }
     .cond-now {
       font-size: 22px;
       font-weight: bold;
-      margin-bottom: 3px;
+      margin-bottom: 6px;
+    }
+    .sub-details td {
+      font-size: 17px;
+      line-height: 1.35;
+      vertical-align: top;
+      width: 50%;
     }
     .section-title {
       font-size: 17px;
@@ -273,16 +278,20 @@
         html += '<td class="updated">Оновлено: ' + padZero(kyivNow.getHours()) + ':' + padZero(kyivNow.getMinutes()) + '</td>';
         html += '</tr></table>';
 
+        // Поточна погода: деталі у дві колонки
         html += '<div class="current-box"><table><tr>';
         html += '<td class="temp-now">' + formatTemp(cur.temperature_2m) + '</td>';
         html += '<td class="details-now">';
         html += '<div class="cond-now">' + getWeatherText(cur.weather_code) + '</div>';
-        html += 'Відчувається: <b>' + formatTemp(cur.apparent_temperature) + '</b><br>';
-        html += 'Вітер: <b>' + Math.round(cur.wind_speed_10m) + ' км/год</b><br>';
-        html += 'Вологість: <b>' + cur.relative_humidity_2m + '%</b><br>';
-        html += 'Опади: <b>' + curPrecip + '%</b>';
+        html += '<table class="sub-details"><tr>';
+        html += '<td>Відчувається: <b>' + formatTemp(cur.apparent_temperature) + '</b><br>';
+        html += 'Вітер: <b>' + Math.round(cur.wind_speed_10m) + ' км/год</b></td>';
+        html += '<td>Вологість: <b>' + cur.relative_humidity_2m + '%</b><br>';
+        html += 'Опади: <b>' + curPrecip + '%</b></td>';
+        html += '</tr></table>';
         html += '</td></tr></table></div>';
 
+        // Прогноз протягом дня
         html += '<div class="section-title">Протягом дня</div>';
         html += '<table class="hourly-table"><tr>';
         var currentHour = kyivNow.getHours();
@@ -303,6 +312,7 @@
         }
         html += '</tr></table>';
 
+        // Прогноз на тиждень
         html += '<div class="section-title">Прогноз на тиждень (натисніть для деталей)</div>';
         html += '<table class="daily-table">';
         for (var d = 0; d < data.daily.time.length; d++) {
@@ -351,12 +361,13 @@
         var avgHum = getDailyAvgHumidity(data, dateStr);
 
         html += '<div class="current-box"><table><tr>';
-        html += '<td class="temp-now" style="font-size:50px;">' + minT + ' .. ' + maxT + '</td>';
-        html += '<td class="details-now">';
+        html += '<td class="temp-now" style="font-size:46px;width:38%;">' + minT + '..' + maxT + '</td>';
+        html += '<td class="details-now" style="width:62%;">';
         html += '<div class="cond-now">' + getWeatherText(data.daily.weather_code[dayIndex]) + '</div>';
-        html += 'Макс. вітер: <b>' + maxWind + ' км/год</b><br>';
-        html += 'Вологість (сер.): <b>' + avgHum + '%</b><br>';
-        html += 'Ймовірність опадів: <b>' + precipProb + '%</b>';
+        html += '<table class="sub-details"><tr>';
+        html += '<td>Вітер: <b>' + maxWind + ' км/год</b><br>Опади: <b>' + precipProb + '%</b></td>';
+        html += '<td>Вологість: <b>' + avgHum + '%</b></td>';
+        html += '</tr></table>';
         html += '</td></tr></table></div>';
 
         html += '<div class="section-title">Погода протягом обраного дня</div>';
@@ -391,11 +402,11 @@
               var hPrecipIcon = getPrecipIcon(hCode);
 
               html += '<tr>';
-              html += '<td class="d-day" style="padding:6px 3px;width:19%;">' + hOnly + '</td>';
-              html += '<td class="d-desc" style="padding:6px 3px;width:36%;">' + getWeatherText(hCode) + '</td>';
-              html += '<td class="d-pop" style="padding:6px 3px;width:14%;">' + hPrecipIcon + '<b>' + hPop + '%</b></td>';
-              html += '<td class="d-hum" style="padding:6px 3px;width:14%;">' + iconDrop + hHum + '%</td>';
-              html += '<td class="d-temp" style="padding:6px 3px;width:17%;">' + formatTemp(data.hourly.temperature_2m[j]) + '</td>';
+              html += '<td class="d-day" style="padding:7px 3px;width:19%;">' + hOnly + '</td>';
+              html += '<td class="d-desc" style="padding:7px 3px;width:36%;">' + getWeatherText(hCode) + '</td>';
+              html += '<td class="d-pop" style="padding:7px 3px;width:14%;">' + hPrecipIcon + '<b>' + hPop + '%</b></td>';
+              html += '<td class="d-hum" style="padding:7px 3px;width:14%;">' + iconDrop + hHum + '%</td>';
+              html += '<td class="d-temp" style="padding:7px 3px;width:17%;">' + formatTemp(data.hourly.temperature_2m[j]) + '</td>';
               html += '</tr>';
             }
           }
