@@ -95,7 +95,7 @@
       font-size: 14px;
     }
     .daily-table td {
-      padding: 10px 4px;
+      padding: 10px 3px;
       border-bottom: 2px solid #000000;
       font-size: 19px;
       cursor: pointer;
@@ -106,16 +106,23 @@
     .d-day {
       font-weight: bold;
       width: 33%;
+      text-align: left;
     }
     .d-desc {
       width: 20%;
       font-size: 16px;
       text-align: left;
     }
-    .d-meta {
-      width: 25%;
+    .d-pop {
+      width: 13%;
       font-size: 15px;
-      text-align: center;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .d-hum {
+      width: 12%;
+      font-size: 15px;
+      text-align: left;
       white-space: nowrap;
     }
     .d-temp {
@@ -312,7 +319,8 @@
           html += '<tr onclick="renderDayView(' + d + ')">';
           html += '<td class="d-day">' + dayLabel + ' <span style="font-weight:normal;font-size:15px;">(' + dateShort + ')</span></td>';
           html += '<td class="d-desc">' + getWeatherText(wCode) + '</td>';
-          html += '<td class="d-meta">' + precipIcon + '<b>' + popMax + '%</b> &nbsp;' + iconDrop + avgHum + '%</td>';
+          html += '<td class="d-pop">' + precipIcon + '<b>' + popMax + '%</b></td>';
+          html += '<td class="d-hum">' + iconDrop + avgHum + '%</td>';
           html += '<td class="d-temp">' + formatTemp(data.daily.temperature_2m_min[d]) + '..' + formatTemp(data.daily.temperature_2m_max[d]) + '<span class="arrow-hint">&rsaquo;</span></td>';
           html += '</tr>';
         }
@@ -383,10 +391,11 @@
               var hPrecipIcon = getPrecipIcon(hCode);
 
               html += '<tr>';
-              html += '<td class="d-day" style="padding:6px 4px;width:20%;">' + hOnly + '</td>';
-              html += '<td class="d-desc" style="padding:6px 4px;width:36%;">' + getWeatherText(hCode) + '</td>';
-              html += '<td class="d-meta" style="padding:6px 4px;width:27%;">' + hPrecipIcon + '<b>' + hPop + '%</b> &nbsp;' + iconDrop + hHum + '%</td>';
-              html += '<td class="d-temp" style="padding:6px 4px;width:17%;">' + formatTemp(data.hourly.temperature_2m[j]) + '</td>';
+              html += '<td class="d-day" style="padding:6px 3px;width:19%;">' + hOnly + '</td>';
+              html += '<td class="d-desc" style="padding:6px 3px;width:36%;">' + getWeatherText(hCode) + '</td>';
+              html += '<td class="d-pop" style="padding:6px 3px;width:14%;">' + hPrecipIcon + '<b>' + hPop + '%</b></td>';
+              html += '<td class="d-hum" style="padding:6px 3px;width:14%;">' + iconDrop + hHum + '%</td>';
+              html += '<td class="d-temp" style="padding:6px 3px;width:17%;">' + formatTemp(data.hourly.temperature_2m[j]) + '</td>';
               html += '</tr>';
             }
           }
