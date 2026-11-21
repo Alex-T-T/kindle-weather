@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="refresh" content="900">
   <title>Погода Львів — Kindle</title>
   <style>
     * {
@@ -110,7 +109,7 @@
     }
     .d-day {
       font-weight: bold;
-      width: 33%;
+      width: 31%;
       text-align: left;
     }
     .d-desc {
@@ -133,7 +132,7 @@
     .d-temp {
       text-align: right;
       font-weight: bold;
-      width: 22%;
+      width: 24%;
       white-space: nowrap;
     }
     .icon-svg {
@@ -155,7 +154,6 @@
       font-weight: bold;
       padding: 8px 16px;
       text-decoration: none;
-      cursor: pointer;
       border: 2px solid #000000;
     }
     .error-msg {
@@ -163,6 +161,14 @@
       font-weight: bold;
       padding: 20px;
       border: 2px solid #000000;
+      text-align: center;
+    }
+    .stale-note {
+      font-size: 15px;
+      font-weight: bold;
+      border: 2px solid #000000;
+      padding: 4px 8px;
+      margin-bottom: 8px;
       text-align: center;
     }
   </style>
@@ -181,8 +187,16 @@
 
   <script type="text/javascript">
     var weatherData = null;
+    var currentDay = -1;      // -1 = головний екран, 0..6 = деталі дня
+    var lastFetchTime = null; // час успішного завантаження (годинник пристрою)
+    var fetchFailed = false;  // остання спроба оновлення не вдалася
 
     (function() {
+      // Налаштування енергоспоживання
+      var REFRESH_MS = 60 * 60 * 1000;   // планове оновлення: раз на годину
+      var RETRY_MS = 5 * 60 * 1000;      // повтор після помилки: через 5 хв
+      var TIMEOUT_MS = 20 * 1000;        // таймаут запиту: 20 с
+
       var apiUrl = "https://api.open-meteo.com/v1/forecast?latitude=49.8397&longitude=24.0297&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,precipitation_probability_max&timezone=Europe%2FKyiv&forecast_days=7";
 
       var daysFull = ["Неділя", "Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота"];
@@ -222,12 +236,25 @@
       }
 
       function formatTemp(val) {
+        if (val === null || val === undefined) return "–";
         var rounded = Math.round(val);
         return (rounded > 0 ? "+" : "") + rounded + "°";
       }
 
-      function padZero(num) {
-        return num < 10 ? "0" + num : "" + num;
+      function pct(val) {
+        return (val === null || val === undefined) ? "–" : val + "%";
+      }
+
+      function num(val) {
+        return (val === null || val === undefined) ? "–" : Math.round(val);
+      }
+
+      function padZero(n) {
+        return n < 10 ? "0" + n : "" + n;
+      }
+
+      function hhmm(date) {
+        return padZero(date.getHours()) + ":" + padZero(date.getMinutes());
       }
 
       function parseIsoDate(str) {
@@ -243,72 +270,89 @@
         );
       }
 
+      function dayLabelFor(data, dayIndex) {
+        var p = data.daily.time[dayIndex].split("-");
+        var dateObj = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+        var label = (dayIndex === 0) ? "Сьогодні" : (dayIndex === 1 ? "Завтра" : daysFull[dateObj.getDay()]);
+        var short = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
+        return { label: label, short: short };
+      }
+
       function getDailyAvgHumidity(data, dateStr) {
         var sum = 0;
         var count = 0;
         for (var i = 0; i < data.hourly.time.length; i++) {
-          if (data.hourly.time[i].indexOf(dateStr) === 0) {
-            sum += data.hourly.relative_humidity_2m[i];
+          var v = data.hourly.relative_humidity_2m[i];
+          if (data.hourly.time[i].indexOf(dateStr) === 0 && v !== null && v !== undefined) {
+            sum += v;
             count++;
           }
         }
-        return count > 0 ? Math.round(sum / count) : 0;
+        return count > 0 ? Math.round(sum / count) : null;
       }
 
-      function getCurrentPrecipProb(data, kyivNow) {
-        var targetPrefix = data.daily.time[0] + "T" + padZero(kyivNow.getHours()) + ":00";
+      function getCurrentPrecipProb(data, dataNow) {
+        var target = data.daily.time[0] + "T" + padZero(dataNow.getHours()) + ":00";
         for (var i = 0; i < data.hourly.time.length; i++) {
-          if (data.hourly.time[i] === targetPrefix) {
+          if (data.hourly.time[i] === target) {
             return data.hourly.precipitation_probability[i];
           }
         }
-        return data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[0] : 0;
+        return data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[0] : null;
+      }
+
+      function staleNoteHtml() {
+        if (!fetchFailed) return "";
+        return '<div class="stale-note">Немає з\'єднання. Показано дані з ' +
+          (lastFetchTime ? hhmm(lastFetchTime) : "–") + '. Повтор через 5 хв.</div>';
       }
 
       window.renderMainView = function() {
         if (!weatherData) return;
+        currentDay = -1;
         var data = weatherData;
         var cur = data.current;
-        var kyivNow = cur.time ? parseIsoDate(cur.time) : new Date();
-        var curPrecip = getCurrentPrecipProb(data, kyivNow);
+        var dataNow = cur.time ? parseIsoDate(cur.time) : new Date();
+        var curPrecip = getCurrentPrecipProb(data, dataNow);
 
         var html = "";
         html += '<table class="header"><tr>';
         html += '<td class="city">Львів</td>';
-        html += '<td class="updated">Оновлено: ' + padZero(kyivNow.getHours()) + ':' + padZero(kyivNow.getMinutes()) + '</td>';
+        html += '<td class="updated">Оновлено: ' + (lastFetchTime ? hhmm(lastFetchTime) : "–") + '</td>';
         html += '</tr></table>';
+        html += staleNoteHtml();
 
-        // Поточна погода: деталі у дві колонки
+        // Поточна погода
         html += '<div class="current-box"><table><tr>';
         html += '<td class="temp-now">' + formatTemp(cur.temperature_2m) + '</td>';
         html += '<td class="details-now">';
         html += '<div class="cond-now">' + getWeatherText(cur.weather_code) + '</div>';
         html += '<table class="sub-details"><tr>';
         html += '<td>Відчувається: <b>' + formatTemp(cur.apparent_temperature) + '</b><br>';
-        html += 'Вітер: <b>' + Math.round(cur.wind_speed_10m) + ' км/год</b></td>';
-        html += '<td>Вологість: <b>' + cur.relative_humidity_2m + '%</b><br>';
-        html += 'Опади: <b>' + curPrecip + '%</b></td>';
+        html += 'Вітер: <b>' + num(cur.wind_speed_10m) + ' км/год</b></td>';
+        html += '<td>Вологість: <b>' + pct(cur.relative_humidity_2m) + '</b><br>';
+        html += 'Опади: <b>' + pct(curPrecip) + '</b></td>';
         html += '</tr></table>';
         html += '</td></tr></table></div>';
 
-        // Прогноз протягом дня
+        // Протягом дня: 4 точки з рівним кроком 3 години, починаючи з найближчої майбутньої години
         html += '<div class="section-title">Протягом дня</div>';
         html += '<table class="hourly-table"><tr>';
-        var currentHour = kyivNow.getHours();
-        var shownHours = 0;
+        var start = -1;
         for (var i = 0; i < data.hourly.time.length; i++) {
-          var itemDate = parseIsoDate(data.hourly.time[i]);
-          if (itemDate.getTime() > kyivNow.getTime() && shownHours < 4) {
-            if ((itemDate.getHours() - currentHour + 24) % 3 === 0 || shownHours === 0) {
-              var hStr = padZero(itemDate.getHours()) + ":00";
-              html += '<td>';
-              html += '<div class="h-time">' + hStr + '</div>';
-              html += '<div class="h-temp">' + formatTemp(data.hourly.temperature_2m[i]) + '</div>';
-              html += '<div class="h-desc">' + getWeatherText(data.hourly.weather_code[i]) + '</div>';
-              html += '</td>';
-              shownHours++;
-            }
+          if (parseIsoDate(data.hourly.time[i]).getTime() > dataNow.getTime()) {
+            start = i;
+            break;
           }
+        }
+        for (var k = 0; k < 4 && start >= 0; k++) {
+          var idx = start + k * 3;
+          if (idx >= data.hourly.time.length) break;
+          html += '<td>';
+          html += '<div class="h-time">' + data.hourly.time[idx].split("T")[1] + '</div>';
+          html += '<div class="h-temp">' + formatTemp(data.hourly.temperature_2m[idx]) + '</div>';
+          html += '<div class="h-desc">' + getWeatherText(data.hourly.weather_code[idx]) + '</div>';
+          html += '</td>';
         }
         html += '</tr></table>';
 
@@ -316,21 +360,16 @@
         html += '<div class="section-title">Прогноз на тиждень (натисніть для деталей)</div>';
         html += '<table class="daily-table">';
         for (var d = 0; d < data.daily.time.length; d++) {
-          var dateStr = data.daily.time[d];
-          var parts = dateStr.split("-");
-          var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-          var dayLabel = (d === 0) ? "Сьогодні" : (d === 1 ? "Завтра" : daysFull[dateObj.getDay()]);
-          var dateShort = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
-          var avgHum = getDailyAvgHumidity(data, dateStr);
-          var popMax = data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[d] : 0;
+          var lbl = dayLabelFor(data, d);
+          var avgHum = getDailyAvgHumidity(data, data.daily.time[d]);
+          var popMax = data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[d] : null;
           var wCode = data.daily.weather_code[d];
-          var precipIcon = getPrecipIcon(wCode);
 
           html += '<tr onclick="renderDayView(' + d + ')">';
-          html += '<td class="d-day">' + dayLabel + ' <span style="font-weight:normal;font-size:15px;">(' + dateShort + ')</span></td>';
+          html += '<td class="d-day">' + lbl.label + ' <span style="font-weight:normal;font-size:15px;">(' + lbl.short + ')</span></td>';
           html += '<td class="d-desc">' + getWeatherText(wCode) + '</td>';
-          html += '<td class="d-pop">' + precipIcon + '<b>' + popMax + '%</b></td>';
-          html += '<td class="d-hum">' + iconDrop + avgHum + '%</td>';
+          html += '<td class="d-pop">' + getPrecipIcon(wCode) + '<b>' + pct(popMax) + '</b></td>';
+          html += '<td class="d-hum">' + iconDrop + pct(avgHum) + '</td>';
           html += '<td class="d-temp">' + formatTemp(data.daily.temperature_2m_min[d]) + '..' + formatTemp(data.daily.temperature_2m_max[d]) + '<span class="arrow-hint">&rsaquo;</span></td>';
           html += '</tr>';
         }
@@ -342,51 +381,33 @@
       window.renderDayView = function(dayIndex) {
         if (!weatherData) return;
         var data = weatherData;
+        if (dayIndex < 0 || dayIndex >= data.daily.time.length) {
+          renderMainView();
+          return;
+        }
+        currentDay = dayIndex;
         var dateStr = data.daily.time[dayIndex];
-        var parts = dateStr.split("-");
-        var dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-        var dayLabel = (dayIndex === 0) ? "Сьогодні" : (dayIndex === 1 ? "Завтра" : daysFull[dateObj.getDay()]);
-        var dateShort = padZero(dateObj.getDate()) + "." + padZero(dateObj.getMonth() + 1);
+        var lbl = dayLabelFor(data, dayIndex);
 
         var html = "";
         html += '<table class="header"><tr>';
-        html += '<td><span class="back-btn" onclick="renderMainView()">&larr; НАЗАД</span></td>';
-        html += '<td class="updated" style="font-size:20px;font-weight:bold;">' + dayLabel + ', ' + dateShort + '</td>';
+        html += '<td><a class="back-btn" href="#" onclick="renderMainView(); return false;">&larr; НАЗАД</a></td>';
+        html += '<td class="updated" style="font-size:20px;font-weight:bold;">' + lbl.label + ', ' + lbl.short + '</td>';
         html += '</tr></table>';
+        html += staleNoteHtml();
 
-        var minT = formatTemp(data.daily.temperature_2m_min[dayIndex]);
-        var maxT = formatTemp(data.daily.temperature_2m_max[dayIndex]);
-        var maxWind = Math.round(data.daily.wind_speed_10m_max[dayIndex]);
-        var precipProb = data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[dayIndex] : 0;
+        var precipProb = data.daily.precipitation_probability_max ? data.daily.precipitation_probability_max[dayIndex] : null;
         var avgHum = getDailyAvgHumidity(data, dateStr);
 
         html += '<div class="current-box"><table><tr>';
-        html += '<td class="temp-now" style="font-size:46px;width:38%;">' + minT + '..' + maxT + '</td>';
+        html += '<td class="temp-now" style="font-size:46px;width:38%;">' + formatTemp(data.daily.temperature_2m_min[dayIndex]) + '..' + formatTemp(data.daily.temperature_2m_max[dayIndex]) + '</td>';
         html += '<td class="details-now" style="width:62%;">';
         html += '<div class="cond-now">' + getWeatherText(data.daily.weather_code[dayIndex]) + '</div>';
         html += '<table class="sub-details"><tr>';
-        html += '<td>Вітер: <b>' + maxWind + ' км/год</b><br>Опади: <b>' + precipProb + '%</b></td>';
-        html += '<td>Вологість: <b>' + avgHum + '%</b></td>';
+        html += '<td>Вітер: <b>до ' + num(data.daily.wind_speed_10m_max[dayIndex]) + ' км/год</b><br>Опади: <b>' + pct(precipProb) + '</b></td>';
+        html += '<td>Вологість: <b>' + pct(avgHum) + '</b></td>';
         html += '</tr></table>';
         html += '</td></tr></table></div>';
-
-        html += '<div class="section-title">Погода протягом обраного дня</div>';
-        html += '<table class="hourly-table"><tr>';
-        var targetHours = ["06:00", "12:00", "18:00", "21:00"];
-        for (var i = 0; i < data.hourly.time.length; i++) {
-          var hFull = data.hourly.time[i];
-          if (hFull.indexOf(dateStr) === 0) {
-            var hourPart = hFull.split("T")[1];
-            if (targetHours.indexOf(hourPart) !== -1) {
-              html += '<td>';
-              html += '<div class="h-time">' + hourPart + '</div>';
-              html += '<div class="h-temp">' + formatTemp(data.hourly.temperature_2m[i]) + '</div>';
-              html += '<div class="h-desc">' + getWeatherText(data.hourly.weather_code[i]) + '</div>';
-              html += '</td>';
-            }
-          }
-        }
-        html += '</tr></table>';
 
         html += '<div class="section-title">Детально по годинах</div>';
         html += '<table class="daily-table">';
@@ -396,16 +417,12 @@
           if (hItem.indexOf(dateStr) === 0) {
             var hOnly = hItem.split("T")[1];
             if (detailHours.indexOf(hOnly) !== -1) {
-              var hHum = data.hourly.relative_humidity_2m[j];
-              var hPop = data.hourly.precipitation_probability[j];
               var hCode = data.hourly.weather_code[j];
-              var hPrecipIcon = getPrecipIcon(hCode);
-
               html += '<tr>';
               html += '<td class="d-day" style="padding:7px 3px;width:19%;">' + hOnly + '</td>';
               html += '<td class="d-desc" style="padding:7px 3px;width:36%;">' + getWeatherText(hCode) + '</td>';
-              html += '<td class="d-pop" style="padding:7px 3px;width:14%;">' + hPrecipIcon + '<b>' + hPop + '%</b></td>';
-              html += '<td class="d-hum" style="padding:7px 3px;width:14%;">' + iconDrop + hHum + '%</td>';
+              html += '<td class="d-pop" style="padding:7px 3px;width:14%;">' + getPrecipIcon(hCode) + '<b>' + pct(data.hourly.precipitation_probability[j]) + '</b></td>';
+              html += '<td class="d-hum" style="padding:7px 3px;width:14%;">' + iconDrop + pct(data.hourly.relative_humidity_2m[j]) + '</td>';
               html += '<td class="d-temp" style="padding:7px 3px;width:17%;">' + formatTemp(data.hourly.temperature_2m[j]) + '</td>';
               html += '</tr>';
             }
@@ -416,23 +433,62 @@
         document.getElementById("app").innerHTML = html;
       };
 
+      // Перемальовує той екран, який зараз відкритий (головний або деталі дня)
+      function renderCurrentView() {
+        if (currentDay >= 0) {
+          renderDayView(currentDay);
+        } else {
+          renderMainView();
+        }
+      }
+
+      function showFatalError(msg) {
+        document.getElementById("app").innerHTML =
+          '<table class="header"><tr><td class="city">Львів</td><td class="updated"></td></tr></table>' +
+          '<div class="error-msg">' + msg + '<br><br>Повтор через 5 хв.</div>';
+      }
+
+      function onFetchError(msg) {
+        fetchFailed = true;
+        if (weatherData) {
+          // Залишаємо старі дані на екрані, лише додаємо попередження
+          renderCurrentView();
+        } else {
+          showFatalError(msg);
+        }
+        setTimeout(fetchWeather, RETRY_MS);
+      }
+
       function fetchWeather() {
         var xhr = new XMLHttpRequest();
+        var finished = false;
+
+        // Ручний таймаут: старий браузер Kindle може не підтримувати xhr.timeout
+        var timer = setTimeout(function() {
+          if (finished) return;
+          finished = true;
+          try { xhr.abort(); } catch (e) {}
+          onFetchError("Сервер не відповідає. Перевірте Wi-Fi.");
+        }, TIMEOUT_MS);
+
         xhr.open("GET", apiUrl, true);
         xhr.onreadystatechange = function() {
-          if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-              try {
-                weatherData = JSON.parse(xhr.responseText);
-                renderMainView();
-              } catch (e) {
-                document.getElementById("app").innerHTML =
-                  '<div class="error-msg">Помилка обробки даних погоди.</div>';
-              }
-            } else {
-              document.getElementById("app").innerHTML =
-                '<div class="error-msg">Не вдалося завантажити дані (код: ' + xhr.status + '). Перевірте Wi-Fi.</div>';
+          if (xhr.readyState !== 4 || finished) return;
+          finished = true;
+          clearTimeout(timer);
+
+          if (xhr.status === 200) {
+            try {
+              weatherData = JSON.parse(xhr.responseText);
+              lastFetchTime = new Date();
+              fetchFailed = false;
+              renderCurrentView();
+              setTimeout(fetchWeather, REFRESH_MS);
+            } catch (e) {
+              onFetchError("Помилка обробки даних погоди.");
             }
+          } else {
+            onFetchError("Не вдалося завантажити дані (код: " + xhr.status + "). Перевірте Wi-Fi.");
           }
         };
         xhr.send();
